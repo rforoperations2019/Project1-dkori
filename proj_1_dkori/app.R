@@ -6,6 +6,7 @@
 #
 #    http://shiny.rstudio.com/
 #
+
 rm(list=ls())
 library(shiny)
 library(dplyr)
@@ -38,7 +39,7 @@ guns$date<-paste(guns$year,guns$month,'01',sep=' ')
 #create a datetime variable out of the date variable
 guns$datetime<-as.Date(guns$date,format='%Y %m %d')
 guns$`Police Involved?`=ifelse(guns$police==1,"Yes","No")
-
+test<-max(guns$datetime,na.rm=TRUE)-min(guns$datetime,na.rm=TRUE)
 
 header <- dashboardHeader(title = "Gun Deaths in America"
 )
@@ -81,44 +82,34 @@ body <- dashboardBody(tabItems(
   tabItem("plot", class="active",
           
           # Input and Value Boxes ----------------------------------------------
-          fluidRow(
+ 
             valueBoxOutput("deaths"),
             valueBoxOutput("timespan"),
             valueBoxOutput("deaths_per_day")
-          ),
+,
           
           # Plot ----------------------------------------------
-          fluidRow(
+          #fluidRow(
             tabBox(title = "timeseries",
                    width = 12,
-                   tabPanel("Time Series", plotOutput("line_plot")))
-          )
+                   tabPanel("Time Series", plotlyOutput("line_plot")))
+          #)
           ),
   
   #Breakdown plot page
   tabItem("plot2", class = "active",
           
-          # Repeat value boxes on this tab
-          fluidRow(
-            infoBoxOutput("deaths"),
-            valueBoxOutput("timespan"),
-            infoBoxOutput("deaths_per_day")
-          ),
-          
           # Plot ----------------------------------------------
-          fluidRow(
-            tabBox(title = "timeseries",
-                   #width = 12,
-                   tabPanel("By Age", plotOutput(outputId = "bar_plot")),
-                   tabPanel("Pct Breakdown",plotOutput(outputId="donut_plot")))
-          )
+            tabBox(title = "Breakdown",
+                   width = 12,
+                   tabPanel("By Age", plotlyOutput(outputId = "bar_plot")),
+                   tabPanel("Overall Share",plotOutput(outputId="donut")))
+          
   ),
 
   # Table Page ----------------------------------------------
     tabItem("table", class = "active",
-          fluidPage(
             box(title = "Data Table", DT::dataTableOutput("datatab")))
-  )
 )
 )
 
@@ -141,7 +132,7 @@ server <- function(input, output) {
       guns%>%
         filter(datetime>input$start_date)
     }
-    subset2<-subset1()[,c("datetime", "age",series_choice())]
+    subset2<-subset1[,c("datetime", "age",series_choice())]
     #rename columns (only way I know how to do this when selecting column through var)
     names(subset2)<-c("datetime","age", "series_choice")
     return(subset2)
@@ -156,29 +147,29 @@ server <- function(input, output) {
   )
   
   #create line_plot in ggplot
-  output$line_plot <- renderPlot({
-    #something is going wrong with the reactive, so assign guns_subset(2) to a non-reactive dataset
-    dat<-guns_subset()
+  output$line_plot <- renderPlotly({
+
     #create the line plot using ggplot2
-    lp<-dat%>%
+    lp<-guns_subset()%>%
       group_by(datetime,series_choice)%>%
       count(name="value")%>%
       ggplot(aes(x=datetime,y=value,color=series_choice))+
       geom_line()+
       theme_minimal()+
       labs(x="Month",y="Number of fatalities",color=names(input$series_choice))
+    lp
     
-    return(lp)
-    
+      # mtcars%>%
+      # ggplot(aes(x=mpg,y=cyl))+
+      # geom_point()
+
   })
   
   
   #create donut plot 
-  output$donut<-renderPlotly({
-    #assign reactive to a stable table
-    dat<-guns_subset()
-    
-    ggdonut<-dat()%>%
+  output$donut<-renderPlot({
+
+    guns_subset()%>%
       group_by(series_choice)%>%
       count(name="value")%>%
       ungroup()%>%
@@ -209,16 +200,15 @@ server <- function(input, output) {
       geom_label(
         aes(x=4,y=(ymax+ymin)/2,label=comma(value)),
         label.size=.175,
-        show.legend=FALSE
-      )
-    ggdonut
+        show.legend=FALSE)
+    
   })
   
   #Barplot by age
   output$bar_plot<-renderPlotly({
-    dat<-guns_subset()
     
-    gg_bar<-dat%>%
+    
+    gg_bar<-guns_subset()%>%
       group_by(age,series_choice)%>%
       count(name="value")%>%
       ungroup()%>%
@@ -237,17 +227,25 @@ server <- function(input, output) {
     
     num <- nrow(guns_subset())
     
-    valueBox(subtitle = "Total Deaths", value = num, icon = icon("sort-numeric-asc"), color = "green")
+    valueBox(subtitle = "Total Deaths", value = comma(num), icon = icon("fa-skull-crossbones",lib="font-awesome"), color = "red")
   })
   #time-span covered valuebox
   output$timespan <- renderValueBox({
     dat<-guns_subset()
-    num <- max(dat$datetime)-min(dat$datetime)
+    num <- as.numeric(max(dat$datetime)-min(dat$datetime))
     
-    valueBox(subtitle = "Timespan", value = num, icon = icon("sort-numeric-asc"), color = "green")
+    valueBox(subtitle = "Days Covered", value = comma(num), icon = icon("calendar"), color = "red")
+  })
+  
+  #deaths/day
+  output$deaths_per_day <- renderValueBox({
+    deaths<-nrow(guns_subset())
+    dat<-guns_subset()
+    days<- as.numeric(max(dat$datetime)-min(dat$datetime))
+    num<-deaths/days
+    valueBox(subtitle = "Deaths per Day", value = round(num), icon = icon("fa-book-dead",lib="font-awesome"), color = "red")
   })
 }
-
 
 # Run the application 
 shinyApp(ui = ui, server = server)
