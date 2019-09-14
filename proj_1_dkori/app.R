@@ -7,7 +7,6 @@
 #    http://shiny.rstudio.com/
 #
 
-rm(list=ls())
 library(shiny)
 library(dplyr)
 library(ggplot2)
@@ -16,17 +15,18 @@ library(httr)
 library(RCurl)
 library(scales)
 library(readr)
+library(plotly)
 
 # Avoid plotly issues ----------------------------------------------
 pdf(NULL)
 
 #load data
 #testing out if read_csv combined with GET will work for dashboards
-# remote_data<-getURL('https://raw.githubusercontent.com/fivethirtyeight/guns-data/master/full_data.csv')
-# #read in gun data
-# guns<-read_csv(remote_data)%>%
-#   #remove rows where intent is null
-#   filter(!is.na(intent))
+remote_data<-getURL('https://raw.githubusercontent.com/fivethirtyeight/guns-data/master/full_data.csv')
+#read in gun data
+guns<-read_csv(remote_data)%>%
+  #remove rows where intent is null
+  filter(!is.na(intent))
 #save(guns,file=".RData")
 #load(".RData")
 # #write guns to a static file in this folder
@@ -39,9 +39,10 @@ guns$date<-paste(guns$year,guns$month,'01',sep=' ')
 #create a datetime variable out of the date variable
 guns$datetime<-as.Date(guns$date,format='%Y %m %d')
 guns$`Police Involved?`=ifelse(guns$police==1,"Yes","No")
+guns$Sex<-ifelse(guns$sex=="M","Male","Female")
 test<-max(guns$datetime,na.rm=TRUE)-min(guns$datetime,na.rm=TRUE)
 
-header <- dashboardHeader(title = "Gun Deaths in America"
+header <- dashboardHeader(title = "Gun Violence Deaths: 2012-2015"
 )
 
 # Dashboard Sidebar ----------------------------------------------
@@ -59,13 +60,13 @@ sidebar <- dashboardSidebar(
                 "Select earliest date:",
                 min = min(guns$datetime),
                 max = max(guns$datetime),
-                value = min(guns$datetime)),
+                value = c(min(guns$datetime),max(guns$datetime))),
     #input to select whether or not suicides are included (since those are the majority of deaths)
     checkboxInput("Checkbox", "Include Suicides?",
                   value = TRUE),
     #create dropdown for user to select series grouping
     selectInput("series_choice", "Choose Series:",
-                c("Sex" = "sex",
+                c("Sex" = "Sex",
                   "Race" = "race",
                   "Location" = "place",
                   "Education" = "education",
@@ -127,7 +128,8 @@ server <- function(input, output) {
     subset1<-if(!input$Checkbox){
       guns%>%
         filter(intent!="Suicide")%>%
-        filter(datetime>input$start_date)
+        filter(datetime>=input$start_date[1],
+               datetime<=input$start_date[2])
     }else{
       guns%>%
         filter(datetime>input$start_date)
@@ -156,7 +158,8 @@ server <- function(input, output) {
       ggplot(aes(x=datetime,y=value,color=series_choice))+
       geom_line()+
       theme_minimal()+
-      labs(x="Month",y="Number of fatalities",color=names(input$series_choice))
+      labs(x="Month",y="Number of fatalities",color=names(input$series_choice),
+           title="Gun Deaths Over Time")
     lp
     
       # mtcars%>%
@@ -200,7 +203,8 @@ server <- function(input, output) {
       geom_label(
         aes(x=4,y=(ymax+ymin)/2,label=comma(value)),
         label.size=.175,
-        show.legend=FALSE)
+        show.legend=FALSE)+
+      labs(title="Share of Gun Deaths by Category")
     
   })
   
@@ -215,7 +219,7 @@ server <- function(input, output) {
       ggplot(aes(x=age,y=value,fill=series_choice))+
       geom_bar(stat="identity",position="stack")+
       theme_minimal()+
-      labs(title="fatalities by age",
+      labs(title="Deaths by Age",
            fill="",
            y="fatalities")
     gg_bar
@@ -227,7 +231,7 @@ server <- function(input, output) {
     
     num <- nrow(guns_subset())
     
-    valueBox(subtitle = "Total Deaths", value = comma(num), icon = icon("fa-skull-crossbones",lib="font-awesome"), color = "red")
+    valueBox(subtitle = "Total Deaths", value = comma(num), icon = icon("cross",lib="font-awesome"), color = "red")
   })
   #time-span covered valuebox
   output$timespan <- renderValueBox({
@@ -243,7 +247,7 @@ server <- function(input, output) {
     dat<-guns_subset()
     days<- as.numeric(max(dat$datetime)-min(dat$datetime))
     num<-deaths/days
-    valueBox(subtitle = "Deaths per Day", value = round(num), icon = icon("fa-book-dead",lib="font-awesome"), color = "red")
+    valueBox(subtitle = "Deaths per Day", value = round(num), icon = icon("heartbeat",lib="font-awesome"), color = "red")
   })
 }
 
