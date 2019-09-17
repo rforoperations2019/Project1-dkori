@@ -42,7 +42,7 @@ guns$`Police Involved?`=ifelse(guns$police==1,"Yes","No")
 guns$Sex<-ifelse(guns$sex=="M","Male","Female")
 test<-max(guns$datetime,na.rm=TRUE)-min(guns$datetime,na.rm=TRUE)
 
-header <- dashboardHeader(title = "Gun Violence Deaths: 2012-2015"
+header <- dashboardHeader(title = "Gun Violence Deaths: 2012-2014"
 )
 
 # Dashboard Sidebar ----------------------------------------------
@@ -66,8 +66,8 @@ sidebar <- dashboardSidebar(
                   value = TRUE),
     #create dropdown for user to select series grouping
     selectInput("series_choice", "Choose Series:",
-                c("Sex" = "Sex",
-                  "Race" = "race",
+                c("Race" = "race",
+                  "Sex" = "Sex",
                   "Location" = "place",
                   "Education" = "education",
                   "Police Involved?" = "Police Involved?"),
@@ -86,14 +86,13 @@ body <- dashboardBody(tabItems(
  
             valueBoxOutput("deaths"),
             valueBoxOutput("timespan"),
-            valueBoxOutput("deaths_per_day")
-,
+            valueBoxOutput("deaths_per_day"),
           
           # Plot ----------------------------------------------
           #fluidRow(
-            tabBox(title = "timeseries",
+            box(title = "Deaths over Time",
                    width = 12,
-                   tabPanel("Time Series", plotlyOutput("line_plot")))
+                   plotlyOutput("line_plot"))
           #)
           ),
   
@@ -127,14 +126,16 @@ server <- function(input, output) {
   guns_subset<-reactive({
     subset1<-if(!input$Checkbox){
       guns%>%
-        filter(intent!="Suicide")%>%
-        filter(datetime>=input$start_date[1],
-               datetime<=input$start_date[2])
+        filter(intent!="Suicide")
     }else{
-      guns%>%
-        filter(datetime>input$start_date)
+      guns
     }
-    subset2<-subset1[,c("datetime", "age",series_choice())]
+    subset2<-subset1[,c("datetime", "age",series_choice())]%>%
+      #limit subset to chosen dates
+      #start date
+      filter(datetime>=input$start_date[1])%>%
+      #end date
+      filter(datetime<=input$start_date[2])
     #rename columns (only way I know how to do this when selecting column through var)
     names(subset2)<-c("datetime","age", "series_choice")
     return(subset2)
@@ -236,18 +237,18 @@ server <- function(input, output) {
   #time-span covered valuebox
   output$timespan <- renderValueBox({
     dat<-guns_subset()
-    num <- as.numeric(max(dat$datetime)-min(dat$datetime))
+    num <- as.numeric(max(dat$datetime)-min(dat$datetime))/30.5
     
-    valueBox(subtitle = "Days Covered", value = comma(num), icon = icon("calendar"), color = "red")
+    valueBox(subtitle = "Months Covered", value = comma(num), icon = icon("calendar"), color = "red")
   })
   
   #deaths/day
   output$deaths_per_day <- renderValueBox({
     deaths<-nrow(guns_subset())
     dat<-guns_subset()
-    days<- as.numeric(max(dat$datetime)-min(dat$datetime))
-    num<-deaths/days
-    valueBox(subtitle = "Deaths per Day", value = round(num), icon = icon("heartbeat",lib="font-awesome"), color = "red")
+    months<- as.numeric(max(dat$datetime)-min(dat$datetime))/30.5
+    num<-(deaths/months)
+    valueBox(subtitle = "Deaths per Month", value = round(num), icon = icon("heartbeat",lib="font-awesome"), color = "red")
   })
 }
 
