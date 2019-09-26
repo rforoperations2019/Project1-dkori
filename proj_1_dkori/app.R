@@ -16,9 +16,10 @@ library(RCurl)
 library(scales)
 library(readr)
 library(plotly)
-
+library(shinytest)
 # Avoid plotly issues ----------------------------------------------
 pdf(NULL)
+
 
 #load data
 #testing out if read_csv combined with GET will work for dashboards
@@ -146,7 +147,12 @@ server <- function(input, output) {
     DT::datatable(guns_subset()%>%
                     group_by(series_choice)%>%
                     count(name="value")%>%
-                    mutate(value=comma(value)),rownames=FALSE)
+                    ungroup()%>%
+                    mutate(Deaths=comma(value))%>%
+                    mutate(" " = series_choice)%>%
+                    dplyr::select(` `, `Deaths`)
+                  ,
+                  rownames=FALSE)
   )
   
   #create line_plot in ggplot
