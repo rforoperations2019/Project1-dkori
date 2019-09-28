@@ -272,7 +272,7 @@ server <- function(input, output) {
       #label axes
       labs(title="Seasonal Breakdown",
            x="Season",
-           y="Percentage of Deaths",
+           y="Number of Deaths",
            fill="")+
       theme_minimal()
     
